@@ -1,44 +1,27 @@
-#include <deque>
+#include <vector>
 #include <algorithm>
 void mf(int ny, int nx, int hy, int hx, const float *in, float *out) {
-  #pragma omp parallel for
+  #pragma omp parallel for schedule(static,1)
   for (int y = 0; y < ny; ++y) {
     int windowTop = (y - hy > 0) ? y - hy : 0;
     int windowBottom = (y + hy + 1 < ny) ? y + hy + 1 : ny;
-
-    std::deque<float> d = {};
-    int wr = (hx + 1 < nx) ? hx + 1 : nx; 
-    for (int j = 0; j < wr; ++j) {
-      for (int i = windowTop; i < windowBottom; ++i) {
-        d.push_back(in[j + i * nx]);
-      }
-    }
+    std::vector<float> v;
+    v.reserve(hx * hy);
     for (int x = 0; x < nx; ++x) {
       int windowLeft = (x - hx > 0) ? x - hx : 0;
       int windowRight = (x + hx + 1 < nx) ? x + hx + 1 : nx;
-
-      if (windowLeft) {
-        for (int n = windowTop; n < windowBottom; ++n) {
-          d.pop_front();
-        }
+      // Create vector
+      v.clear();
+      //v.reserve((windowBottom - windowTop) * (windowRight - windowLeft));
+      for (int i = windowTop; i < windowBottom; ++i) {
+        v.insert(v.end(), in + windowLeft + i * nx, in + windowRight + i*nx);
       }
-      int dequeSize = d.size();
-      float v[dequeSize];
-      std::copy(d.begin(), d.end(), v);
-      int halfSize = d.size() >> 1;
-      std::nth_element(v, v + halfSize, v + dequeSize);
-      if (dequeSize % 2) {
-        out[x + y * nx] = v[halfSize];
-      } else {
-        float first = v[halfSize];
-        std::nth_element(v, v - 1 + halfSize, v + dequeSize);
-        out[x + y * nx] = (v[halfSize - 1] + first) / 2;
-      }
-
-      if (windowRight - nx) {
-        for (int i = windowTop; i < windowBottom; ++i) {
-          d.push_back(in[windowRight + i * nx]);
-        }
+      std::nth_element(v.begin(), v.begin() + v.size() / 2, v.end());
+      out[x + y * nx] = v[v.size() / 2];
+      if (!(v.size() % 2)) {
+        std::nth_element(v.begin(), v.begin() - 1 + v.size() / 2, v.end());
+        out[x + y * nx] /= 2;
+        out[x + y * nx] += v[v.size() / 2 - 1] / 2;
       }
     }
   }

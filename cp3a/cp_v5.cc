@@ -1,6 +1,7 @@
 #include <cmath>
 #include <new>
 #include <x86intrin.h>
+#include <immintrin.h>
 #include <iostream>
 
 typedef double double4_t __attribute__ ((vector_size (4 * sizeof(double))));
@@ -21,7 +22,7 @@ void correlate(int ny, int nx, const float *data, float *result) {
     constexpr double4_t d4zero{0,0,0,0};
     const int vectorsPerCol = (ny + doublesPerVector - 1) / doublesPerVector;
     double4_t* input = double4_alloc(nx * vectorsPerCol);
-    #pragma omp parallel for schedule(static,1)
+    #pragma omp parallel for
     for (int vec = 0; vec < vectorsPerCol; ++vec) { // Packing data into input, vectorized and padded.
         for (int doub = 0; doub < doublesPerVector; ++doub) {
             for (int col = 0; col < nx; ++col) {
@@ -30,7 +31,7 @@ void correlate(int ny, int nx, const float *data, float *result) {
             }
         }
     }
-    #pragma omp parallel for schedule(static,1)
+    #pragma omp parallel for
     for (int vec = 0; vec < vectorsPerCol; ++vec) { // Normalization
         double4_t means = d4zero;
         double4_t rsSums = d4zero;
@@ -53,16 +54,20 @@ void correlate(int ny, int nx, const float *data, float *result) {
     #pragma omp parallel for schedule(static,1)
     for (int outer = 0; outer < vectorsPerCol; ++outer) {
         double4_t n[4];
+        double4_t out;
+        double4_t outS;
+        double4_t in;
+        double4_t inS;
         for (int inner = outer; inner < vectorsPerCol; ++inner) {
             n[0] = d4zero;
             n[1] = d4zero;
             n[2] = d4zero;
             n[3] = d4zero;
             for (int col = 0; col < nx; ++col) {
-                double4_t out = input[col + outer * nx];
-                double4_t outS = swap(out);
-                double4_t in = input[col + inner * nx];
-                double4_t inS = swap2(in);
+                out = input[col + outer * nx];
+                outS = swap(out);
+                in = input[col + inner * nx];
+                inS = swap2(in);
                 n[0] += out * in;
                 n[1] += outS * in;
                 n[2] += out * inS;
@@ -82,4 +87,4 @@ void correlate(int ny, int nx, const float *data, float *result) {
         }
     }
     free(input);
-}
+}   

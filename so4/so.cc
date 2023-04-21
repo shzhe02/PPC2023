@@ -16,44 +16,45 @@ int binarySearch(int start, int end, data_t target, data_t* data) {
     }
     return left;
 }
-void merge(int leftStart, int leftEnd, int rightStart, int rightEnd, int outputStart, data_t* data, data_t* aux) { // ends are exclusive
-    int leftCursor = leftStart, rightCursor = rightStart, outputCursor = outputStart;
-    while (leftCursor < leftEnd && rightCursor < rightEnd) {
-        data_t elemA = data[leftCursor], elemB = data[rightCursor];
-        if (elemA < elemB) {
-            aux[outputCursor++] = elemA;
-            ++leftCursor;
-        } else {
-            aux[outputCursor++] = elemB;
-            ++rightCursor;
-        }
+void mergePar(int leftStart, int leftEnd, int rightStart, int rightEnd, int outputStart, data_t* data, data_t* aux) {
+    int lS = leftStart;
+    int lE = leftEnd;
+    int rS = rightStart;
+    int rE = rightEnd;
+    int leftLen = leftEnd - leftStart;
+    int rightLen = rightEnd - rightStart;
+    if (leftLen < rightLen) {
+        int tmpS = lS;
+        int tmpE = lE;
+        lS = rS;
+        lE = rE;
+        rS = tmpS;
+        rE = tmpE;
+        int tmpLen = leftLen;
+        leftLen = rightLen;
+        rightLen = tmpLen;
     }
-    while (leftCursor < leftEnd) { aux[outputCursor++] = data[leftCursor++]; }
-    while (rightCursor < rightEnd) { aux[outputCursor++] = data[rightCursor++]; }
-}
-void mergePar(int start, int mid, int end, data_t* data, data_t* aux) {
-    int increment = 1 << 16;
-    int sections = (mid - start - 1) / increment;
-    int leftBreaks[sections + 2];
-    int rightBreaks[sections + 2];
-    leftBreaks[0] = start;
-    rightBreaks[0] = mid;
-    leftBreaks[sections + 1] = mid;
-    rightBreaks[sections + 1] = end;
-    #pragma omp parallel for // Calculating breaks
-    for (int i = 1; i <= sections; ++i) {
-        int leftBreak = start + i * increment;
-        leftBreaks[i] = leftBreak;
-        rightBreaks[i] = binarySearch(mid, end, data[leftBreak], data);
+    if (leftLen <= 0) {
+        return;
     }
-    #pragma omp parallel for schedule(static,1)
-    for (int i = 0; i <= sections; ++i) {
-        merge(leftBreaks[i], leftBreaks[i + 1], rightBreaks[i], rightBreaks[i + 1], leftBreaks[i] + rightBreaks[i] - mid, data, aux);
+    int r = (lS + lE) / 2;
+    int s = binarySearch(rS, rE, data[r], data);
+    int t = outputStart + (r - lS) + (s - rS);
+    aux[outputStart] = data[r];
+
+    #pragma omp parallel
+    #pragma omp single
+    {
+        #pragma omp task
+        mergePar(lS, r, rS, s, outputStart, data, aux);
+        #pragma omp task
+        mergePar(r + 1, lE, s, rE, t + 1, data, aux);
     }
-    std::copy(aux + start, aux + end, data + start);
+    
+    std::copy(aux + outputStart, aux + outputStart + leftLen + rightLen, data + outputStart);
 }
 void inner(int left, int right, data_t* data, data_t* aux) { // right is exclusive
-    constexpr int threshold = 1 << 25; // Change to 13 for final
+    constexpr int threshold = 1 << 2; // Change to 13 for final
     int midpoint = (left + right) / 2;
     if (right - left > threshold) { // Splitting/Sorting stage
         #pragma omp parallel
@@ -64,13 +65,11 @@ void inner(int left, int right, data_t* data, data_t* aux) { // right is exclusi
             #pragma omp task
             inner(midpoint, right, data, aux);
         }
-        // inner(left, midpoint, data, aux);
-        // inner(midpoint, right, data, aux);
     } else {
         std::sort(data + left, data + right);
         return;
     }
-    mergePar(left, midpoint, right, data, aux);
+    mergePar(left, midpoint, midpoint, right, left, data, aux);
 }
 void psort(int n, data_t *data) {
     data_t* aux = (data_t*) malloc(n * sizeof(data_t));

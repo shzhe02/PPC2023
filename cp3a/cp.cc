@@ -1,26 +1,35 @@
 #include <cmath>
 #include <new>
-#include <x86intrin.h>
-#include <iostream>
-
-typedef double double4_t __attribute__ ((vector_size (4 * sizeof(double))));
-
-static double4_t* double4_alloc(std::size_t n) {
+#include <immintrin.h>
+typedef double double8_t __attribute__ ((vector_size (8 * sizeof(double))));
+static double8_t* double8_alloc(std::size_t n) {
     void* tmp = 0;
-    if (posix_memalign(&tmp, sizeof(double4_t), sizeof(double4_t) * n)) {
+    if (posix_memalign(&tmp, sizeof(double8_t), sizeof(double8_t) * n)) {
         throw std::bad_alloc();
     }
-    return (double4_t*)tmp;
+    return (double8_t*)tmp;
 }
-
-static inline double4_t swap(double4_t x) { return _mm256_permute_pd(x, 0b0101); }
-static inline double4_t swap2(double4_t x) { return _mm256_permute2f128_pd(x, x, 0b0001); }
-
+__m512i idx = _mm512_set_epi32(0, 3, 0, 2, 0, 1, 0, 0, 0, 7, 0, 6, 0, 5, 0, 4);
+static inline double8_t swap4(double8_t x) { return _mm512_permutex2var_pd(x, idx, x); }
+static inline double8_t fma(double8_t a, double8_t b, double8_t c) { return _mm512_fmadd_pd(a, b, c);}
+#if defined(__clang__)
+    static inline double8_t swap2(double8_t x) { return _mm512_permutex_pd(x, 0b01001110); }
+    static inline double8_t swap1(double8_t x) { return _mm512_permute_pd(x, 0b01010101); }
+#elif defined(___GNUC__) || defined(__GNUG__)
+    // Hacky workaround due to GCC bug. Code below essentially does the same thing as the intrinsics in the function definitions above,
+    // but with "_mm512_undefined_pd" removed from the intrinsics' definitions.
+    static inline double8_t swap2(double8_t x) { return ((__m512d) __builtin_ia32_permdf512_mask ((__v8df)(__m512d)(x), (int)(0b01001110),	\
+					    (__v8df)(__m512d) {},\
+					    (__mmask8)-1)); }
+    static inline double8_t swap1(double8_t x) { return ((__m512d) __builtin_ia32_vpermilpd512_mask ((__v8df)(__m512d)(x), (int)(0b01010101),	    \
+					      (__v8df)(__m512d) {},\
+					      (__mmask8)(-1))); }
+#endif
 void correlate(int ny, int nx, const float *data, float *result) {
-    constexpr int doublesPerVector = 4;
-    constexpr double4_t d4zero{0,0,0,0};
+    constexpr int doublesPerVector = 8;
+    constexpr double8_t d8zero{0};
     const int vectorsPerCol = (ny + doublesPerVector - 1) / doublesPerVector;
-    double4_t* input = double4_alloc(nx * vectorsPerCol);
+    double8_t* input = double8_alloc(nx * vectorsPerCol);
     #pragma omp parallel for schedule(static,1)
     for (int vec = 0; vec < vectorsPerCol; ++vec) { // Packing data into input, vectorized and padded.
         for (int doub = 0; doub < doublesPerVector; ++doub) {
@@ -32,8 +41,8 @@ void correlate(int ny, int nx, const float *data, float *result) {
     }
     #pragma omp parallel for schedule(static,1)
     for (int vec = 0; vec < vectorsPerCol; ++vec) { // Normalization
-        double4_t means = d4zero;
-        double4_t rsSums = d4zero;
+        double8_t means = d8zero;
+        double8_t rsSums = d8zero;
         for (int col = 0; col < nx; ++col) { // Calculating means
             means += input[col + vec * nx];
         }
@@ -49,37 +58,56 @@ void correlate(int ny, int nx, const float *data, float *result) {
         for (int col = 0; col < nx; ++col) { // Normalization step
             input[col + vec * nx] = (input[col + vec * nx] - means) / rsSums;
         } // Normalized
-    }
+    } // Preparations complete
     #pragma omp parallel for schedule(static,1)
     for (int outer = 0; outer < vectorsPerCol; ++outer) {
-        double4_t n[4];
+        double8_t vv[8];
         for (int inner = outer; inner < vectorsPerCol; ++inner) {
-            n[0] = d4zero;
-            n[1] = d4zero;
-            n[2] = d4zero;
-            n[3] = d4zero;
+            vv[0] = d8zero;
+            vv[1] = d8zero;
+            vv[2] = d8zero;
+            vv[3] = d8zero;
+            vv[4] = d8zero;
+            vv[5] = d8zero;
+            vv[6] = d8zero;
+            vv[7] = d8zero;
             for (int col = 0; col < nx; ++col) {
-                double4_t out = input[col + outer * nx];
-                double4_t outS = swap(out);
-                double4_t in = input[col + inner * nx];
-                double4_t inS = swap2(in);
-                n[0] += out * in;
-                n[1] += outS * in;
-                n[2] += out * inS;
-                n[3] += outS * inS;
+                double8_t a000 = input[nx*outer + col];
+                double8_t b000 = input[nx*inner + col];
+                double8_t a100 = swap4(a000);
+                double8_t a010 = swap2(a000);
+                double8_t a110 = swap2(a100);
+                double8_t b001 = swap1(b000);
+                //vv[0] += a000 * b000;
+                vv[0] = fma(a000, b000, vv[0]);
+                //vv[1] += a000 * b001;
+                vv[1] = fma(a000, b001, vv[1]);
+                // vv[2] += a010 * b000;
+                vv[2] = fma(a010, b000, vv[2]);
+                // vv[3] += a010 * b001;
+                vv[3] = fma(a010, b001, vv[3]);
+                vv[4] += a100 * b000;
+                // vv[4] = fma(a100, b000, vv[4]);
+                vv[5] += a100 * b001;
+                // vv[5] = fma(a100, b001, vv[5]);
+                vv[6] += a110 * b000;
+                // vv[6] = fma(a110, b000, vv[6]);
+                vv[7] += a110 * b001;
+                // vv[7] = fma(a110, b001, vv[7]);
             }
-            n[2] = swap2(n[2]);
-            n[3] = swap2(n[3]);
-            for (int i = 0; i < doublesPerVector; ++i) {
-                for (int j = 0; j < doublesPerVector; ++j) {
-                    int row = outer * doublesPerVector + i;
-                    int col = inner * doublesPerVector + j;
-                    if (row < ny && col < ny) {
-                        result[col + row * ny] = n[i^j][j];
+            for (int kb = 1; kb < 8; kb += 2) {
+                vv[kb] = swap1(vv[kb]);
+            }
+            for (int jb = 0; jb < 8; ++jb) {
+                for (int ib = 0; ib < 8; ++ib) {
+                    int i = ib + outer*8;
+                    int j = jb + inner*8;
+                    if (j < ny && i < ny) {
+                        result[ny*i + j] = vv[ib^jb][jb];
                     }
                 }
             }
         }
     }
     free(input);
-}
+}   

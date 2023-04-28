@@ -1,6 +1,7 @@
 #include <cmath>
+#include <vector>
 void correlate(int ny, int nx, const float *data, float *result) {
-    double row[2*ny];
+    std::vector<double> row(2*ny);
     #pragma omp parallel for
     for (int r = 0; r < ny; ++r) {
         double rowSum = 0;

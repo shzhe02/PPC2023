@@ -1,7 +1,8 @@
 #include <cmath>
 #include <new>
+#include <vector>
+#include <immintrin.h>
 typedef double double4_t __attribute__ ((vector_size (4 * sizeof(double))));
-
 static double4_t* double4_alloc(std::size_t n) {
     void* tmp = 0;
     if (posix_memalign(&tmp, sizeof(double4_t), sizeof(double4_t) * n)) {
@@ -9,9 +10,9 @@ static double4_t* double4_alloc(std::size_t n) {
     }
     return (double4_t*)tmp;
 }
-
+static inline double4_t sqrt4_t(double4_t x) { return _mm256_sqrt_pd(x); }
 void correlate(int ny, int nx, const float *data, float *result) {
-    double row[2*ny];
+    std::vector<double> row(2*ny);
     constexpr int doublesPerVector = 4;
     constexpr double4_t zero{0,0,0,0};
     const int vectorsPerRow = (nx + doublesPerVector - 1) / doublesPerVector;
@@ -53,7 +54,7 @@ void correlate(int ny, int nx, const float *data, float *result) {
                 sumIJ += sumsIJ[doub];
             }
             result[i + j * ny] = (sumIJ * nx - row[2*i] * sumJ) 
-                / sqrt((row[2*i + 1] * nx - row[2*i] * row[2*i]) * (row[2*j + 1] * nx - sumJ * sumJ));
+                / sqrt4_t((row[2*i + 1] * nx - row[2*i] * row[2*i]) * (row[2*j + 1] * nx - sumJ * sumJ));
         }
     }
     free(sums);

@@ -1,18 +1,22 @@
 #include <cmath>
-#include <new>
-#include <immintrin.h>
-typedef double double8_t __attribute__ ((vector_size (8 * sizeof(double))));
-static double8_t* double8_alloc(std::size_t n) {
+#include <chrono>
+#include <iostream>
+
+typedef double double4_t __attribute__ ((vector_size (4 * sizeof(double))));
+
+static double4_t* double4_alloc(std::size_t n) {
     void* tmp = 0;
-    if (posix_memalign(&tmp, sizeof(double8_t), sizeof(double8_t) * n)) {
+    if (posix_memalign(&tmp, sizeof(double4_t), sizeof(double4_t) * n)) {
         throw std::bad_alloc();
     }
-    return (double8_t*)tmp;
+    return (double4_t*)tmp;
 }
+
 void correlate(int ny, int nx, const float *data, float *result) {
-    constexpr int doublesPerVector = 8;
+    auto start = std::chrono::high_resolution_clock::now();
+    constexpr int doublesPerVector = 4;
     const int vectorsPerRow = (nx + doublesPerVector - 1) / doublesPerVector;
-    double8_t* input = double8_alloc(vectorsPerRow * ny);
+    double4_t* input = double4_alloc(vectorsPerRow * ny);
     for (int row = 0; row < ny; ++row) { // Getting the normalized input matrix
         double mean = 0;
         double rootedSquaredSum = 0;
@@ -31,10 +35,13 @@ void correlate(int ny, int nx, const float *data, float *result) {
             }
         }
     }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    std::cout << "Normalized - " << duration.count() << " microseconds" << std::endl;
     for (int row = 0; row < ny; ++row) {
         result[row + row * ny] = 1;
         for (int innerRow = row + 1; innerRow < ny; ++innerRow) {
-            double8_t sum = {0,0,0,0};
+            double4_t sum = {0,0,0,0};
             for (int vec = 0; vec < vectorsPerRow; ++vec) {
                 sum += input[vec + vectorsPerRow * row] * input[vec + vectorsPerRow * innerRow];
             }
@@ -46,4 +53,7 @@ void correlate(int ny, int nx, const float *data, float *result) {
         }
     }
     free(input);
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start - duration);
+    std::cout << "Done - " << duration.count() << " microseconds" << std::endl;
 }

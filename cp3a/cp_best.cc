@@ -1,6 +1,6 @@
 #include <cmath>
 #include <new>
-#include <x86intrin.h>
+#include <immintrin.h>
 #include <iostream>
 typedef double double4_t __attribute__ ((vector_size (4 * sizeof(double))));
 static double4_t* double4_alloc(std::size_t n) {

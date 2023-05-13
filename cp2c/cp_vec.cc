@@ -54,7 +54,7 @@ void correlate(int ny, int nx, const float *data, float *result) {
                 sumIJ += sumsIJ[doub];
             }
             result[i + j * ny] = (sumIJ * nx - row[2*i] * sumJ) 
-                / sqrt4_t((row[2*i + 1] * nx - row[2*i] * row[2*i]) * (row[2*j + 1] * nx - sumJ * sumJ));
+                / sqrt((row[2*i + 1] * nx - row[2*i] * row[2*i]) * (row[2*j + 1] * nx - sumJ * sumJ));
         }
     }
     free(sums);

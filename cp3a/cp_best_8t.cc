@@ -64,20 +64,25 @@ void correlate(int ny, int nx, const float *data, float *result) {
     } // Preparations complete
     #pragma omp parallel for schedule(static,1)
     for (int outer = 0; outer < vectorsPerCol; ++outer) {
-        double8_t vv[24];
-        double8_t a000, a100, a010, a110, b000, b001, c000, c001, d000, d001;
-        for (int inner = outer; inner < vectorsPerCol; inner += 3) {
-            for (int i = 0; i < 24; ++i) {
-                vv[i] = d8zero;
-            }
+        double8_t vv[8];
+        double8_t a000, a100, a010, a110, b000, b001;
+        for (int inner = outer; inner < vectorsPerCol; ++inner) {
+            vv[0] = d8zero;
+            vv[1] = d8zero;
+            vv[2] = d8zero;
+            vv[3] = d8zero;
+            vv[4] = d8zero;
+            vv[5] = d8zero;
+            vv[6] = d8zero;
+            vv[7] = d8zero;
             for (int col = 0; col < nx; ++col) {
                 a000 = input[nx*outer + col];
                 a100 = swap4(a000);
-                a110 = swap2(a100);
                 a010 = swap2(a000);
+                a110 = swap2(a100);
                 b000 = input[nx*inner + col];
                 b001 = swap1(b000);
-                vv[0] = fma(a000, b000, vv[0]); // Half FMA seems to improve times slightly (?)
+                vv[0] = fma(a000, b000, vv[0]);
                 vv[1] = fma(a000, b001, vv[1]);
                 vv[2] = fma(a010, b000, vv[2]);
                 vv[3] = fma(a010, b001, vv[3]);
@@ -85,52 +90,21 @@ void correlate(int ny, int nx, const float *data, float *result) {
                 vv[5] += a100 * b001;
                 vv[6] += a110 * b000;
                 vv[7] += a110 * b001;
-                if (inner + 1 < vectorsPerCol) {
-                    c000 = input[nx*(inner + 1) + col];
-                    c001 = swap1(c000);
-                    vv[8] = fma(a000, c000, vv[8]);
-                    vv[9] = fma(a000, c001, vv[9]);
-                    vv[10] = fma(a010, c000, vv[10]);
-                    vv[11] = fma(a010, c001, vv[11]);
-                    vv[12] += a100 * c000;
-                    vv[13] += a100 * c001;
-                    vv[14] += a110 * c000;
-                    vv[15] += a110 * c001;
-                }
-                if (inner + 2 < vectorsPerCol) {
-                    d000 = input[nx*(inner + 2) + col];
-                    d001 = swap1(d000);
-                    vv[16] = fma(a000, d000, vv[16]);
-                    vv[17] = fma(a000, d001, vv[17]);
-                    vv[18] = fma(a010, d000, vv[18]);
-                    vv[19] = fma(a010, d001, vv[19]);
-                    vv[20] += a100 * d000;
-                    vv[21] += a100 * d001;
-                    vv[22] += a110 * d000;
-                    vv[23] += a110 * d001;
-                }
             }
-            for (int i = 1; i < 24; i += 2) {
-                vv[i] = swap1(vv[i]);
-            }
-            for (int jb = 0; jb < 8; ++jb) { 
-                int j = jb + inner*8;
-                int j2 = jb + (inner + 1) * 8;
-                int j3 = jb + (inner + 2) * 8;
-                for (int ib = 0; ib < 8; ++ib) {
-                    int i = ib + outer*8;
+            vv[1] = swap1(vv[1]);
+            vv[3] = swap1(vv[3]);
+            vv[5] = swap1(vv[5]);
+            vv[7] = swap1(vv[7]);
+            for (int ib = 0; ib < 8; ++ ib) {
+                int i = ib + outer * 8;
+                for (int jb = 0; jb < 8; ++jb) {
+                    int j = jb + inner * 8;
                     if (j < ny && i < ny) {
-                        result[ny*i + j] = vv[ib^jb][jb];
-                    }
-                    if (j2 < ny && i < ny) {
-                        result[ny*i + j2] = vv[(ib^jb) + 8][jb];
-                    }
-                    if (j3 < ny && i < ny) {
-                        result[ny*i + j3] = vv[(ib^jb) + 16][jb];
+                        result[ny * i + j] = vv[ib ^ jb][jb];
                     }
                 }
             }
         }
     }
     free(input);
-}   
+}

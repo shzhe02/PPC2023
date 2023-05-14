@@ -1,7 +1,6 @@
 #include <cmath>
 #include <new>
 #include <x86intrin.h>
-#include <iostream>
 
 typedef double double4_t __attribute__ ((vector_size (4 * sizeof(double))));
 
@@ -23,8 +22,6 @@ void correlate(int ny, int nx, const float *data, float *result) {
     constexpr double4_t d4zero{0,0,0,0};
     const int vectorsPerCol = (ny + doublesPerVector - 1) / doublesPerVector;
     const int blocksPerCol = (ny + doublesPerBlock - 1) / doublesPerBlock;
-    std::cout << "BlocksPerCol: " << blocksPerCol << std::endl;
-    std::cout << "VectorsPerCol: " << vectorsPerCol << std::endl;
     double4_t* input = double4_alloc(nx * blocksPerCol * blockSize);
     #pragma omp parallel for
     for (int vec = 0; vec < vectorsPerCol; ++vec) { // Packing data into input, vectorized and padded.

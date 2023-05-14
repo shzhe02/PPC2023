@@ -64,10 +64,10 @@ void correlate(int ny, int nx, const float *data, float *result) {
     } // Preparations complete
     #pragma omp parallel for schedule(static,1)
     for (int outer = 0; outer < vectorsPerCol; ++outer) {
-        double8_t vv[24];
-        double8_t a000, a100, a010, a110, b000, b001, c000, c001, d000, d001;
-        for (int inner = outer; inner < vectorsPerCol; inner += 3) {
-            for (int i = 0; i < 24; ++i) {
+        double8_t vv[16];
+        double8_t a000, a100, a010, a110, b000, b001, c000, c001;
+        for (int inner = outer; inner < vectorsPerCol; inner += 2) {
+            for (int i = 0; i < 16; ++i) {
                 vv[i] = d8zero;
             }
             for (int col = 0; col < nx; ++col) {
@@ -97,26 +97,13 @@ void correlate(int ny, int nx, const float *data, float *result) {
                     vv[14] += a110 * c000;
                     vv[15] += a110 * c001;
                 }
-                if (inner + 2 < vectorsPerCol) {
-                    d000 = input[nx*(inner + 2) + col];
-                    d001 = swap1(d000);
-                    vv[16] = fma(a000, d000, vv[16]);
-                    vv[17] = fma(a000, d001, vv[17]);
-                    vv[18] = fma(a010, d000, vv[18]);
-                    vv[19] = fma(a010, d001, vv[19]);
-                    vv[20] += a100 * d000;
-                    vv[21] += a100 * d001;
-                    vv[22] += a110 * d000;
-                    vv[23] += a110 * d001;
-                }
             }
-            for (int i = 1; i < 24; i += 2) {
+            for (int i = 1; i < 16; i += 2) {
                 vv[i] = swap1(vv[i]);
             }
             for (int jb = 0; jb < 8; ++jb) { 
                 int j = jb + inner*8;
                 int j2 = jb + (inner + 1) * 8;
-                int j3 = jb + (inner + 2) * 8;
                 for (int ib = 0; ib < 8; ++ib) {
                     int i = ib + outer*8;
                     if (j < ny && i < ny) {
@@ -124,9 +111,6 @@ void correlate(int ny, int nx, const float *data, float *result) {
                     }
                     if (j2 < ny && i < ny) {
                         result[ny*i + j2] = vv[(ib^jb) + 8][jb];
-                    }
-                    if (j3 < ny && i < ny) {
-                        result[ny*i + j3] = vv[(ib^jb) + 16][jb];
                     }
                 }
             }

@@ -69,10 +69,6 @@ void correlate(int ny, int nx, const float *data, float *result) {
             for (int i = 0; i < 40; ++i) {
                 vv[i] = d8zero;
             }
-            int skip = 0;
-            if (inner + 5 > vectorsPerCol) {
-                skip = inner - vectorsPerCol + 5;
-            }
             for (int col = 0; col < nx; ++col) {
                 a000 = input[nx*outer + col];
                 a100 = swap4(a000);
@@ -88,57 +84,53 @@ void correlate(int ny, int nx, const float *data, float *result) {
                 vv[3] += a010 * b000;
                 vv[5] += a100 * b000;
                 vv[7] += a110 * b000;
-                switch (skip) {
-                    case 0:
-                        f000 = input[nx*(inner + 4) + col];
-                        vv[32] += a000 * f000;
-                        vv[34] += a010 * f000;
-                        vv[36] += a100 * f000;
-                        vv[38] += a110 * f000;
-                        f000 = swap1(f000);
-                        vv[33] += a000 * f000;
-                        vv[35] += a010 * f000;
-                        vv[37] += a100 * f000;
-                        vv[39] += a110 * f000;
-                        [[fallthrough]];
-                    case 1:
-                        e000 = input[nx*(inner + 3) + col];
-                        vv[24] += a000 * e000;
-                        vv[26] += a010 * e000;
-                        vv[28] += a100 * e000;
-                        vv[30] += a110 * e000;
-                        e000 = swap1(e000);
-                        vv[25] += a000 * e000;
-                        vv[27] += a010 * e000;
-                        vv[29] += a100 * e000;
-                        vv[31] += a110 * e000;
-                        [[fallthrough]];
-                    case 2:
-                        d000 = input[nx*(inner + 2) + col];
-                        vv[16] += a000 * d000;
-                        vv[18] += a010 * d000;
-                        vv[20] += a100 * d000;
-                        vv[22] += a110 * d000;
-                        d000 = swap1(d000);
-                        vv[17] += a000 * d000;
-                        vv[19] += a010 * d000;
-                        vv[21] += a100 * d000;
-                        vv[23] += a110 * d000;
-                        [[fallthrough]];
-                    case 3:
-                        c000 = input[nx*(inner + 1) + col];
-                        vv[8] += a000 * c000;
-                        vv[10] += a010 * c000;
-                        vv[12] += a100 * c000;
-                        vv[14] += a110 * c000;
-                        c000 = swap1(c000);
-                        vv[9] += a000 * c000;
-                        vv[11] += a010 * c000;
-                        vv[13] += a100 * c000;
-                        vv[15] += a110 * c000;
-                        [[fallthrough]];
-                    case 4:
-                        break;
+                if (inner + 1 < vectorsPerCol) {
+                    c000 = input[nx*(inner + 1) + col];
+                    vv[8] += a000 * c000;
+                    vv[10] += a010 * c000;
+                    vv[12] += a100 * c000;
+                    vv[14] += a110 * c000;
+                    c000 = swap1(c000);
+                    vv[9] += a000 * c000;
+                    vv[11] += a010 * c000;
+                    vv[13] += a100 * c000;
+                    vv[15] += a110 * c000;
+                }
+                if (inner + 2 < vectorsPerCol) {
+                    d000 = input[nx*(inner + 2) + col];
+                    vv[16] += a000 * d000;
+                    vv[18] += a010 * d000;
+                    vv[20] += a100 * d000;
+                    vv[22] += a110 * d000;
+                    d000 = swap1(d000);
+                    vv[17] += a000 * d000;
+                    vv[19] += a010 * d000;
+                    vv[21] += a100 * d000;
+                    vv[23] += a110 * d000;
+                }
+                if (inner + 3 < vectorsPerCol) {
+                    e000 = input[nx*(inner + 3) + col];
+                    vv[24] += a000 * e000;
+                    vv[26] += a010 * e000;
+                    vv[28] += a100 * e000;
+                    vv[30] += a110 * e000;
+                    e000 = swap1(e000);
+                    vv[25] += a000 * e000;
+                    vv[27] += a010 * e000;
+                    vv[29] += a100 * e000;
+                    vv[31] += a110 * e000;
+                }
+                if (inner + 4 < vectorsPerCol) {
+                    f000 = input[nx*(inner + 4) + col];
+                    vv[32] += a000 * f000;
+                    vv[34] += a010 * f000;
+                    vv[36] += a100 * f000;
+                    vv[38] += a110 * f000;
+                    f000 = swap1(f000);
+                    vv[33] += a000 * f000;
+                    vv[35] += a010 * f000;
+                    vv[37] += a100 * f000;
+                    vv[39] += a110 * f000;
                 }
             }
             for (int i = 1; i < 40; i += 2) {

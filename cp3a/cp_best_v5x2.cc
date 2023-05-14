@@ -31,6 +31,7 @@ void correlate(int ny, int nx, const float *data, float *result) {
     constexpr double8_t d8zero{0};
     const int vectorsPerCol = (ny + doublesPerVector - 1) / doublesPerVector;
     double8_t* input = double8_alloc(nx * vectorsPerCol);
+    asm("# --- Packing");
     #pragma omp parallel for schedule(static,1)
     for (int vec = 0; vec < vectorsPerCol; ++vec) { // Packing data into input, vectorized and padded.
         for (int doub = 0; doub < doublesPerVector; ++doub) {
@@ -40,6 +41,7 @@ void correlate(int ny, int nx, const float *data, float *result) {
             }
         }
     }
+    asm("# --- Normalization step");
     #pragma omp parallel for schedule(static,1)
     for (int vec = 0; vec < vectorsPerCol; ++vec) { // Normalization
         double8_t means = d8zero;
@@ -62,14 +64,18 @@ void correlate(int ny, int nx, const float *data, float *result) {
             input[col + vec * nx] /= rsSums;
         } // Normalized
     } // Preparations complete
+    asm("# --- Compute - Outer");
     #pragma omp parallel for schedule(static,1)
     for (int outer = 0; outer < vectorsPerCol; ++outer) {
         double8_t vv[16];
         double8_t a000, a100, a010, a110, b000, b001, c000, c001;
+        asm("# --- Compute - Inner");
         for (int inner = outer; inner < vectorsPerCol; inner += 2) {
+            asm("# --- Setting to zero");
             for (int i = 0; i < 16; ++i) {
                 vv[i] = d8zero;
             }
+            asm("# --- Compute - Computing");
             for (int col = 0; col < nx; ++col) {
                 a000 = input[nx*outer + col];
                 a100 = swap4(a000);
@@ -88,10 +94,10 @@ void correlate(int ny, int nx, const float *data, float *result) {
                 if (inner + 1 < vectorsPerCol) {
                     c000 = input[nx*(inner + 1) + col];
                     c001 = swap1(c000);
-                    vv[8] = fma(a000, c000, vv[8]);
-                    vv[9] = fma(a000, c001, vv[9]);
-                    vv[10] = fma(a010, c000, vv[10]);
-                    vv[11] = fma(a010, c001, vv[11]);
+                    vv[8] += a000 * c000;
+                    vv[9] += a000 * c001;
+                    vv[10] += a010 * c000;
+                    vv[11] += a010 * c001;
                     vv[12] += a100 * c000;
                     vv[13] += a100 * c001;
                     vv[14] += a110 * c000;
@@ -104,6 +110,7 @@ void correlate(int ny, int nx, const float *data, float *result) {
             for (int jb = 0; jb < 8; ++jb) { 
                 int j = jb + inner*8;
                 int j2 = jb + (inner + 1) * 8;
+                asm("# --- Compute - Returning");
                 for (int ib = 0; ib < 8; ++ib) {
                     int i = ib + outer*8;
                     if (j < ny && i < ny) {

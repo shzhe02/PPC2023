@@ -61,17 +61,13 @@ void correlate(int ny, int nx, const float *data, float *result) {
             input[col + vec * nx] /= rsSums;
         } // Normalized
     } // Preparations complete
-    #pragma omp parallel for schedule(dynamic)
+    #pragma omp parallel for schedule(dynamic,1)
     for (int outer = 0; outer < vectorsPerCol; ++outer) {
-        double8_t vv[40];
-        double8_t a000, a100, a010, a110, b000, c000, d000, e000, f000;
-        for (int inner = outer; inner < vectorsPerCol; inner += 5) {
-            for (int i = 0; i < 40; ++i) {
+        double8_t vv[24];
+        double8_t a000, a100, a010, a110, b000, b001, c000, c001, d000, d001;
+        for (int inner = outer; inner < vectorsPerCol; inner += 3) {
+            for (int i = 0; i < 24; ++i) {
                 vv[i] = d8zero;
-            }
-            int skip = 0;
-            if (inner + 5 > vectorsPerCol) {
-                skip = inner - vectorsPerCol + 5;
             }
             for (int col = 0; col < nx; ++col) {
                 a000 = input[nx*outer + col];
@@ -79,77 +75,47 @@ void correlate(int ny, int nx, const float *data, float *result) {
                 a110 = swap2(a100);
                 a010 = swap2(a000);
                 b000 = input[nx*inner + col];
+                b001 = swap1(b000);
                 vv[0] += a000 * b000;
+                vv[1] += a000 * b001;
+                vv[3] += a010 * b001;
                 vv[2] += a010 * b000;
                 vv[4] += a100 * b000;
+                vv[5] += a100 * b001;
                 vv[6] += a110 * b000;
-                b000 = swap1(b000);
-                vv[1] += a000 * b000;
-                vv[3] += a010 * b000;
-                vv[5] += a100 * b000;
-                vv[7] += a110 * b000;
-                switch (skip) {
-                    case 0:
-                        f000 = input[nx*(inner + 4) + col];
-                        vv[32] += a000 * f000;
-                        vv[34] += a010 * f000;
-                        vv[36] += a100 * f000;
-                        vv[38] += a110 * f000;
-                        f000 = swap1(f000);
-                        vv[33] += a000 * f000;
-                        vv[35] += a010 * f000;
-                        vv[37] += a100 * f000;
-                        vv[39] += a110 * f000;
-                        [[fallthrough]];
-                    case 1:
-                        e000 = input[nx*(inner + 3) + col];
-                        vv[24] += a000 * e000;
-                        vv[26] += a010 * e000;
-                        vv[28] += a100 * e000;
-                        vv[30] += a110 * e000;
-                        e000 = swap1(e000);
-                        vv[25] += a000 * e000;
-                        vv[27] += a010 * e000;
-                        vv[29] += a100 * e000;
-                        vv[31] += a110 * e000;
-                        [[fallthrough]];
-                    case 2:
-                        d000 = input[nx*(inner + 2) + col];
-                        vv[16] += a000 * d000;
-                        vv[18] += a010 * d000;
-                        vv[20] += a100 * d000;
-                        vv[22] += a110 * d000;
-                        d000 = swap1(d000);
-                        vv[17] += a000 * d000;
-                        vv[19] += a010 * d000;
-                        vv[21] += a100 * d000;
-                        vv[23] += a110 * d000;
-                        [[fallthrough]];
-                    case 3:
-                        c000 = input[nx*(inner + 1) + col];
-                        vv[8] += a000 * c000;
-                        vv[10] += a010 * c000;
-                        vv[12] += a100 * c000;
-                        vv[14] += a110 * c000;
-                        c000 = swap1(c000);
-                        vv[9] += a000 * c000;
-                        vv[11] += a010 * c000;
-                        vv[13] += a100 * c000;
-                        vv[15] += a110 * c000;
-                        [[fallthrough]];
-                    case 4:
-                        break;
+                vv[7] += a110 * b001;
+                if (inner + 1 < vectorsPerCol) {
+                    c000 = input[nx*(inner + 1) + col];
+                    c001 = swap1(c000);
+                    vv[8] += a000 * c000;
+                    vv[9] += a000 * c001;
+                    vv[10] += a010 * c000;
+                    vv[11] += a010 * c001;
+                    vv[12] += a100 * c000;
+                    vv[13] += a100 * c001;
+                    vv[14] += a110 * c000;
+                    vv[15] += a110 * c001;
+                }
+                if (inner + 2 < vectorsPerCol) {
+                    d000 = input[nx*(inner + 2) + col];
+                    d001 = swap1(d000);
+                    vv[16] += a000 * d000;
+                    vv[17] += a000 * d001;
+                    vv[18] += a010 * d000;
+                    vv[19] += a010 * d001;
+                    vv[20] += a100 * d000;
+                    vv[21] += a100 * d001;
+                    vv[22] += a110 * d000;
+                    vv[23] += a110 * d001;
                 }
             }
-            for (int i = 1; i < 40; i += 2) {
+            for (int i = 1; i < 24; i += 2) {
                 vv[i] = swap1(vv[i]);
             }
             for (int jb = 0; jb < 8; ++jb) { 
                 int j = jb + inner*8;
                 int j2 = jb + (inner + 1) * 8;
                 int j3 = jb + (inner + 2) * 8;
-                int j4 = jb + (inner + 3) * 8;
-                int j5 = jb + (inner + 4) * 8;
                 for (int ib = 0; ib < 8; ++ib) {
                     int i = ib + outer*8;
                     if (i < ny && j < ny) {
@@ -160,12 +126,6 @@ void correlate(int ny, int nx, const float *data, float *result) {
                     }
                     if (i < ny && j3 < ny) {
                         result[ny*i + j3] = vv[(ib^jb) + 16][jb];
-                    }
-                    if (i < ny && j4 < ny) {
-                        result[ny*i + j4] = vv[(ib^jb) + 24][jb];
-                    }
-                    if (i < ny && j5 < ny) {
-                        result[ny*i + j5] = vv[(ib^jb) + 32][jb];
                     }
                 }
             }

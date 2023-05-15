@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <cuda_runtime.h>
+#include <iostream>
 #include <cmath>
 static inline int divup(int a, int b) {return (a + b - 1)/b;}
 static inline void check(cudaError_t err, const char* context) {
@@ -41,6 +42,7 @@ void correlate(int ny, int nx, const float *data, float *result) {
             input[col + nx * row] = (data[col + nx * row] - mean) / rootedSquaredSum;
         }
     }
+    std::cout << "Testing" << std::endl;
     float* inGPU = NULL; // Initialize buffers
     float* outGPU = NULL;
     CHECK(cudaMalloc((void**)&inGPU, ny * nx * sizeof(float)));

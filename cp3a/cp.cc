@@ -25,7 +25,7 @@ static inline double8_t swap4(double8_t x) { return _mm512_permutex2var_pd(x, id
 					      (__mmask8)(-1))); }
 #endif
 void correlate(int ny, int nx, const float *data, float *result) {
-    //constexpr int PF = 2;
+    constexpr int windowHeight = 11;
     constexpr int doublesPerVector = 8;
     constexpr double8_t d8zero{0};
     const int vectorsPerCol = (ny + doublesPerVector - 1) / doublesPerVector;
@@ -63,113 +63,50 @@ void correlate(int ny, int nx, const float *data, float *result) {
     } // Preparations complete
     #pragma omp parallel for schedule(dynamic)
     for (int outer = 0; outer < vectorsPerCol; ++outer) {
-        double8_t vv[40];
-        double8_t a000, a100, a010, a110, b000, c000, d000, e000, f000;
-        for (int inner = outer; inner < vectorsPerCol; inner += 5) {
-            for (int i = 0; i < 40; ++i) {
+        double8_t vv[8 * windowHeight];
+        double8_t b[1 + windowHeight];
+        double8_t a000, a100, a010, a110;
+        for (int inner = outer; inner < vectorsPerCol; inner += windowHeight) {
+            for (int i = 0; i < 8 * windowHeight; ++i) {
                 vv[i] = d8zero;
             }
-            int skip = 0;
-            if (inner + 5 > vectorsPerCol) {
-                skip = inner - vectorsPerCol + 5;
+            int actualWindow = windowHeight;
+            if (inner + windowHeight > vectorsPerCol) {
+                actualWindow = vectorsPerCol - inner;
             }
             for (int col = 0; col < nx; ++col) {
                 a000 = input[nx*outer + col];
                 a100 = swap4(a000);
-                a110 = swap2(a100);
                 a010 = swap2(a000);
-                b000 = input[nx*inner + col];
-                vv[0] += a000 * b000;
-                vv[2] += a010 * b000;
-                vv[4] += a100 * b000;
-                vv[6] += a110 * b000;
-                b000 = swap1(b000);
-                vv[1] += a000 * b000;
-                vv[3] += a010 * b000;
-                vv[5] += a100 * b000;
-                vv[7] += a110 * b000;
-                switch (skip) {
-                    case 0:
-                        f000 = input[nx*(inner + 4) + col];
-                        vv[32] += a000 * f000;
-                        vv[34] += a010 * f000;
-                        vv[36] += a100 * f000;
-                        vv[38] += a110 * f000;
-                        f000 = swap1(f000);
-                        vv[33] += a000 * f000;
-                        vv[35] += a010 * f000;
-                        vv[37] += a100 * f000;
-                        vv[39] += a110 * f000;
-                        [[fallthrough]];
-                    case 1:
-                        e000 = input[nx*(inner + 3) + col];
-                        vv[24] += a000 * e000;
-                        vv[26] += a010 * e000;
-                        vv[28] += a100 * e000;
-                        vv[30] += a110 * e000;
-                        e000 = swap1(e000);
-                        vv[25] += a000 * e000;
-                        vv[27] += a010 * e000;
-                        vv[29] += a100 * e000;
-                        vv[31] += a110 * e000;
-                        [[fallthrough]];
-                    case 2:
-                        d000 = input[nx*(inner + 2) + col];
-                        vv[16] += a000 * d000;
-                        vv[18] += a010 * d000;
-                        vv[20] += a100 * d000;
-                        vv[22] += a110 * d000;
-                        d000 = swap1(d000);
-                        vv[17] += a000 * d000;
-                        vv[19] += a010 * d000;
-                        vv[21] += a100 * d000;
-                        vv[23] += a110 * d000;
-                        [[fallthrough]];
-                    case 3:
-                        c000 = input[nx*(inner + 1) + col];
-                        vv[8] += a000 * c000;
-                        vv[10] += a010 * c000;
-                        vv[12] += a100 * c000;
-                        vv[14] += a110 * c000;
-                        c000 = swap1(c000);
-                        vv[9] += a000 * c000;
-                        vv[11] += a010 * c000;
-                        vv[13] += a100 * c000;
-                        vv[15] += a110 * c000;
-                        [[fallthrough]];
-                    case 4:
-                        break;
+                a110 = swap2(a100);
+                for (int k = 0; k < actualWindow; ++k) {
+                    b[k] = d8zero; //input[nx*(inner + k) + col]; NOTE: Remember to undo this
+                    vv[0 + 8 * k] += a000 * b[k];
+                    vv[2 + 8 * k] += a010 * b[k];
+                    vv[4 + 8 * k] += a100 * b[k];
+                    vv[6 + 8 * k] += a110 * b[k];
+                    b[k] = swap1(b[k]);
+                    vv[1 + 8 * k] += a000 * b[k];
+                    vv[3 + 8 * k] += a010 * b[k];
+                    vv[5 + 8 * k] += a100 * b[k];
+                    vv[7 + 8 * k] += a110 * b[k];
                 }
             }
-            for (int i = 1; i < 40; i += 2) {
+            for (int i = 1; i < 8 * windowHeight; i += 2) {
                 vv[i] = swap1(vv[i]);
             }
-            for (int jb = 0; jb < 8; ++jb) { 
-                int j = jb + inner*8;
-                int j2 = jb + (inner + 1) * 8;
-                int j3 = jb + (inner + 2) * 8;
-                int j4 = jb + (inner + 3) * 8;
-                int j5 = jb + (inner + 4) * 8;
-                for (int ib = 0; ib < 8; ++ib) {
-                    int i = ib + outer*8;
-                    if (i < ny && j < ny) {
-                        result[ny*i + j] = vv[ib^jb][jb];
-                    }
-                    if (i < ny && j2 < ny) {
-                        result[ny*i + j2] = vv[(ib^jb) + 8][jb];
-                    }
-                    if (i < ny && j3 < ny) {
-                        result[ny*i + j3] = vv[(ib^jb) + 16][jb];
-                    }
-                    if (i < ny && j4 < ny) {
-                        result[ny*i + j4] = vv[(ib^jb) + 24][jb];
-                    }
-                    if (i < ny && j5 < ny) {
-                        result[ny*i + j5] = vv[(ib^jb) + 32][jb];
+            for (int ib = 0; ib < 8; ++ib) {
+                int i = ib + outer * 8;
+                for (int jb = 0; jb < 8 && i < ny; ++jb) {
+                    for (int k = 0; k < actualWindow; ++k) {
+                        int j = jb + (inner + k) * 8;
+                        if (j < ny) {
+                            result[ny * i + j] = vv[(ib ^ jb) + 8 * k][jb];
+                        }
                     }
                 }
             }
         }
     }
     free(input);
-}   
+}

@@ -11,11 +11,10 @@ static inline void check(cudaError_t err, const char* context) {
     }
 }
 #define CHECK(x) check(x, #x)
-__global__ void preprocessor(int ny, int nx, int nn, const float* originalData, const float* processedData) {
-    int ti = threadIdx.x;
-    int bi = blockIdx.y;
-    
-}
+// __global__ void preprocessor(int ny, int nx, int nn, const float* originalData, const float* processedData) {
+//     int ti = threadIdx.x;
+//     int bi = blockIdx.y;
+// }
 __global__ void kernel(float* out, const float* input, int ny, int nx) {
     int col = threadIdx.x + blockIdx.x * blockDim.x; // handling i, aka innerRow
     int row = threadIdx.y + blockIdx.y * blockDim.y; // handling j, aka outerRow
@@ -40,11 +39,13 @@ void correlate(int ny, int nx, const float *data, float *result) {
         }
         mean /= nx;
         for (int col = 0; col < nx; ++col) { // Get squared sum of the row
-            rootedSquaredSum += (data[col + nx * row] - mean) * (data[col + nx * row] - mean);
+            float diff = data[col + nx * row] - mean;
+            rootedSquaredSum += diff * diff;
+            input[col + nx * row] = diff;
         }
         rootedSquaredSum = sqrt(rootedSquaredSum);
         for (int col = 0; col < nx; ++col) { // Normalize inputs
-            input[col + nx * row] = (data[col + nx * row] - mean) / rootedSquaredSum;
+            input[col + nx * row] /= rootedSquaredSum;
         }
     }
     float* inGPU = NULL; // Initialize buffers

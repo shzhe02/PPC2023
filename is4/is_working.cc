@@ -53,26 +53,23 @@ Result segment(int ny, int nx, const float *data) {
     }
     free(input);
     // Finding all possible combinations
-    
+    Result result{0, 0, 0, 0, {0, 0, 0}, {0, 0, 0}};
     std::vector<double> errors(ny);
     for (int i = 0; i < ny; ++i) {
         errors[i] = std::numeric_limits<double>::max();
     }
     std::vector<Result> results(ny);
+    double error = std::numeric_limits<double>::max();
     double elemsB = double(ny * nx);
     double4_t totalElems = {elemsB, elemsB, elemsB, 1};
 
-
-    #pragma omp parallel for schedule(dynamic)
     for (int height = 1; height <= ny; ++height) {
-        Result result{0, 0, 0, 0, {0, 0, 0}, {0, 0, 0}};
-
         for (int width = 1; width <= nx; ++width) {
 
             double elems = double(height * width);
             double4_t elemsInWindow = {elems, elems, elems, 1};
             double4_t elemsInBg = totalElems - elemsInWindow;
-            double elemsBg = elemsB - elems;
+            double elemsBg = elemsInBg[0];
 
             for (int y0 = 0; y0 <= ny - height; ++y0) {
                 int y1 = y0 + height;
@@ -81,9 +78,9 @@ Result segment(int ny, int nx, const float *data) {
                     double4_t windowSum = sums[x1 + y1 * (nx + 1)] - sums[x1 + y0 * (nx + 1)] - sums[x0 + y1 * (nx + 1)] + sums[x0 + y0 * (nx + 1)];
                     double4_t avgWindowColor = windowSum / elemsInWindow;
                     double4_t avgWindowColor2 = avgWindowColor * avgWindowColor;
-                    double avgWindowSum2 = avgWindowColor2[0] + avgWindowColor2[1] + avgWindowColor2[2];
+                    double avgWindowSum2 = avgWindowColor2[0] + avgWindowColor2[1] + avgWindowColor2[2]; //First Term
                     double4_t avgWindowColorAndSum = avgWindowColor * windowSum;
-                    double avgWindowSumColor = avgWindowColorAndSum[0] + avgWindowColorAndSum[1] + avgWindowColorAndSum[2];
+                    double avgWindowSumColor = avgWindowColorAndSum[0] + avgWindowColorAndSum[1] + avgWindowColorAndSum[2];// Second Term
                     double windowError = elems * avgWindowSum2 - 2 * avgWindowSumColor + windowSum[3];
 
                     double4_t bgSum = sums[nx + ny * (nx + 1)] - windowSum;
@@ -96,8 +93,8 @@ Result segment(int ny, int nx, const float *data) {
 
                     double newError = windowError + bgError;
 
-                    if (newError < errors[height - 1]) {
-                        errors[height - 1] = newError;
+                    if (newError < error) {
+                        error = newError;
                         result.y0 = y0;
                         result.x0 = x0;
                         result.y1 = y1;
@@ -110,11 +107,7 @@ Result segment(int ny, int nx, const float *data) {
                 }
             }
         }
-        results[height - 1] = result;
     }
     free(sums);
-
-    auto min = std::min_element(errors.begin(), errors.end());
-    int idx = std::distance(errors.begin(), min);
-    return results[idx];
+    return result;
 }

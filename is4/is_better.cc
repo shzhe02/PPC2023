@@ -88,8 +88,20 @@ Result segment(int ny, int nx, const float *data) {
                     double4_t avgWindowColor = windowSum * invElemsInWindow;
                     double4_t avgBgColor = bgSum * invElemsInBg;
 
-                    double windowError = elems * sumRGB(avgWindowColor * avgWindowColor) - 2 * sumRGB(avgWindowColor * windowSum) + windowSum[3];
-                    double bgError = elemsBg * sumRGB(avgBgColor * avgBgColor) - 2 * sumRGB(avgBgColor * bgSum) + bgSum[3];
+                    double4_t avgWindowColor2 = avgWindowColor * avgWindowColor;
+                    double4_t avgBgColor2 = avgBgColor * avgBgColor;
+
+                    //double avgWindowSum2 = avgWindowColor2[0] + avgWindowColor2[1] + avgWindowColor2[2];
+                    //double avgBgSum2 = avgBgColor2[0] + avgBgColor2[1] + avgBgColor2[2];
+
+                    double4_t avgWindowColorAndSum = avgWindowColor * windowSum;
+                    double4_t avgBgColorAndSum = avgBgColor * bgSum;
+
+                    //double avgWindowSumColor = avgWindowColorAndSum[0] + avgWindowColorAndSum[1] + avgWindowColorAndSum[2];
+                    //double avgBgSumColor = avgBgColorAndSum[0] + avgBgColorAndSum[1] + avgBgColorAndSum[2];
+
+                    double windowError = elems * sumRGB(avgWindowColor2) - 2 * sumRGB(avgWindowColorAndSum) + windowSum[3];
+                    double bgError = elemsBg * sumRGB(avgBgColor2) - 2 * sumRGB(avgBgColorAndSum) + bgSum[3];
 
                     double newError = windowError + bgError;
 

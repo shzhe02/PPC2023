@@ -11,10 +11,6 @@ static inline void check(cudaError_t err, const char* context) {
     }
 }
 #define CHECK(x) check(x, #x)
-// __global__ void preprocessor(int ny, int nx, int nn, const float* originalData, const float* processedData) {
-//     int ti = threadIdx.x;
-//     int bi = blockIdx.y;
-// }
 __global__ void kernel(float* out, const float* input, int ny, int nx) {
     int col = threadIdx.x + blockIdx.x * blockDim.x; // handling i, aka innerRow
     int row = threadIdx.y + blockIdx.y * blockDim.y; // handling j, aka outerRow

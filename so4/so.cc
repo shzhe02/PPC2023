@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <omp.h>
 #include <vector>
+#include <cmath>
 typedef unsigned long long data_t;
 int binarySearch(int start, int end, data_t target, data_t* data) {
     int left = start;
@@ -48,13 +49,17 @@ void mergePar(int leftStart, int leftEnd, int rightStart, int rightEnd, int outp
     {
         #pragma omp task
         mergePar(lS, r, rS, s, outputStart, in, out);
-        #pragma omp 
+        #pragma omp task
         mergePar(r + 1, lE, s, rE, t + 1, in, out);
         #pragma omp taskwait
     }
 }
 void psort(int n, data_t *data) {
     int threads = omp_get_max_threads();
+    if (threads > 1) {
+        unsigned int power = static_cast<unsigned int>(log2(threads));
+        threads = 1 << power;
+    }
     if (n < 2 * threads) {
         std::sort(data, data + n);
         return;

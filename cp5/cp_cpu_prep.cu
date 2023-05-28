@@ -13,30 +13,14 @@ static inline void check(cudaError_t err, const char* context) {
 __global__ void preprocessor(float* raw, int ny, int nx, int nny) {
     int thread = threadIdx.x;
     int row = blockIdx.y;
+    if (row >= ny) { return; }
     float* processed = raw + nx * ny;
-    if (row >= ny) {
-        for (int i = 0; i < nx; i += 64) {
-            int col = i + thread;
-            processed[nny * col + row] = 0;
-        }
-        return; 
-    }
-
-    float mean = 0; 
+    float mean = 0;
     float rootedSquaredSum = 0;
-    for (int col = 0; col < nx; ++col) {
-        mean += raw[col + nx * row];
-    }
-    mean /= nx;
-    for (int col = 0; col < nx; ++col) { // Get squared sum of the row
-        float diff = raw[col + nx * row] - mean;
-        rootedSquaredSum += diff * diff;
-    }
-    rootedSquaredSum = sqrt(rootedSquaredSum);
 
-    for (int i = 0; i < nx; i += 64) { // Padding
+    for (int i = 0; i < nx; i += 64) {
         int col = i + thread;
-        processed[nny * col + row] = (col < nx) ? ((raw[nx * row + col] - mean) / rootedSquaredSum) : 0;
+        processed[nny * col + row] = (col < nx) ? raw[nx * row + col] : 0;
     }
 }
 __global__ void kernel(float* out, const float* in, int ny, int nx, int nny) {
@@ -96,11 +80,30 @@ void correlate(int ny, int nx, const float *data, float *result) {
     int nnx = roundup(nx, 64);
     int nny = roundup(ny, 64);
 
+    float* input = (float*) malloc(ny * nx * sizeof(float));
+    for (int row = 0; row < ny; ++row) { // Getting the normalized input matrix
+        float mean = 0; // Get the mean of the column
+        float rootedSquaredSum = 0;
+        for (int col = 0; col < nx; ++col) {
+            mean += data[col + nx * row];
+        }
+        mean /= nx;
+        for (int col = 0; col < nx; ++col) { // Get squared sum of the row
+            float diff = data[col + nx * row] - mean;
+            rootedSquaredSum += diff * diff;
+            input[col + nx * row] = diff;
+        }
+        rootedSquaredSum = sqrt(rootedSquaredSum);
+        for (int col = 0; col < nx; ++col) { // Normalize inputs
+            input[col + nx * row] /= rootedSquaredSum;
+        }
+    }
     float* inGPU = NULL; // Initialize buffers
     float* outGPU = NULL;
     CHECK(cudaMalloc((void**)&inGPU, (nny * nnx + ny * nx) * sizeof(float)));
     CHECK(cudaMalloc((void**)&outGPU, nny * nny * sizeof(float)));
-    CHECK(cudaMemcpy(inGPU, data, ny * nx * sizeof(float), cudaMemcpyHostToDevice)); // Move input to GPU
+    CHECK(cudaMemcpy(inGPU, input, ny * nx * sizeof(float), cudaMemcpyHostToDevice)); // Move input to GPU
+    free(input);
     { // Preprocessing
         dim3 dimBlock(64, 1);
         dim3 dimGrid(1, nny);

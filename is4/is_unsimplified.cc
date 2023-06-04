@@ -77,6 +77,7 @@ Result segment(int ny, int nx, const float *data) {
             double4_t invElemsInWindow = one4_t / elemsInWindow;
             double4_t elemsInBg = totalElems - elemsInWindow;
             double4_t invElemsInBg = one4_t / elemsInBg;
+            //double elemsBg = elemsB - elems;
 
             for (int y0 = 0; y0 <= ny - height; ++y0) {
                 int y1 = y0 + height;
@@ -85,7 +86,10 @@ Result segment(int ny, int nx, const float *data) {
                     double4_t windowSum = sums[x1 + y1 * (nx + 1)] - sums[x1 + y0 * (nx + 1)] - sums[x0 + y1 * (nx + 1)] + sums[x0 + y0 * (nx + 1)];
                     double4_t bgSum = sums[nx + ny * (nx + 1)] - windowSum;
 
-                    double newError = sums[nx + ny * (nx + 1)][3] + sumRGB(bgSum * bgSum * (invElemsInBg - two4_t * invElemsInBg) - windowSum * invElemsInWindow * windowSum);
+                    double4_t avgWindowColor = windowSum * invElemsInWindow;
+                    double4_t avgBgColor = bgSum * invElemsInBg;
+
+                    double newError = sumRGB(windowSum * windowSum * invElemsInWindow + bgSum * bgSum * invElemsInBg - two4_t * (avgWindowColor * windowSum + avgBgColor * bgSum)) + sums[nx + ny * (nx + 1)][3];
 
                     if (newError < errors[height - 1]) {
                         errors[height - 1] = newError;
@@ -93,8 +97,6 @@ Result segment(int ny, int nx, const float *data) {
                         result.x0 = x0;
                         result.y1 = y1;
                         result.x1 = x1;
-                        double4_t avgWindowColor = windowSum * invElemsInWindow;
-                        double4_t avgBgColor = bgSum * invElemsInBg;
                         for (int c = 0; c < 3; ++c) {
                             result.inner[c] = avgWindowColor[c];
                             result.outer[c] = avgBgColor[c];

@@ -1,3 +1,0 @@
-timeout 0.4
-random 101 rand_small
-threads 10

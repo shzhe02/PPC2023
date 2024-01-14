@@ -1,2 +1,0 @@
-timeout 0.4
-random 21 rand_small

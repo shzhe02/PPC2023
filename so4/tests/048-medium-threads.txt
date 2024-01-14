@@ -1,3 +1,0 @@
-timeout 0.4
-random 11 benchmark
-threads 8

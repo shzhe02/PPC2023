@@ -1,2 +1,0 @@
-timeout 50.0
-random 100000000 benchmark

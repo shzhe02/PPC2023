@@ -1,2 +1,0 @@
-timeout 10
-structured-binary 199 199

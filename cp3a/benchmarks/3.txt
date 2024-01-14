@@ -1,2 +1,0 @@
-timeout 13.6
-random 6000 6000 5

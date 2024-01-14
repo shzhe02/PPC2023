@@ -1,2 +1,0 @@
-timeout 0.5
-structured-worstcase 7 2
